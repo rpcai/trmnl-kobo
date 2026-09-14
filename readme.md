@@ -75,6 +75,7 @@ Here are the steps to get the TRMNL app working on your Kobo (show hidden folder
     - Note: DPI might be too big, below Kindle PW 7th gen for Clara HD: 
     - ![Capture](./doc/img/nottrmnlogsupport.png)
     - Note: If using TERMINUS and PNG media/type, please [see guide to fix orientation](https://github.com/usetrmnl/trmnl-kobo/issues/17#issuecomment-3237420484), thanks [z0rzi](https://github.com/z0rzi)
+  - **ImageRotate**: Degrees to rotate the downloaded image before display: `0` (default), `90`, `180` or `270`. This panel has no hardware rotation of its own, so if your server intentionally composes in the other orientation (e.g. a landscape-designed dashboard on a portrait-only panel like Clara HD) and you don’t want Tesserae/Terminus reflowing the design to portrait, rotate the raster here instead. Requires `convert` (ImageMagick), bundled by Kobostuff.
   - **IgnoreCurlErrors**: Set to `true` to ignore errors from `curl` commands during the TRMNL loop and retry in the next iteration. This will continue showing outdated screen rather than the error screen. Default is `false`. This is helpful for dodgy network connections.
   - **WpaNetworkId**: Specifies the WPA network identifier to use. Default is `-1`, which means no specific network ID is set.
     - You can get the id by ssh'ing into Kobo and running `wpa_cli list_networks`, using ID of the network you want. 
@@ -88,7 +89,8 @@ Here are the steps to get the TRMNL app working on your Kobo (show hidden folder
     "LogToServer": "NONE",
     "LoopMaxIteration": 0,
     "ConnectedGracePeriod": 0,
-    "ImageFormat": "bmp" 
+    "ImageFormat": "bmp",
+    "ImageRotate": 0
 }
 ````
 
@@ -96,13 +98,13 @@ Here are the steps to get the TRMNL app working on your Kobo (show hidden folder
   - (Located in src/nm/TRMNL.ini in this repo)
 - TRMNL app can be started using NickelMenu
    - ![Menu](./doc/img/menu.png) 
-- To exit the TRMNL loop, press the **home button**. The loop finishes its current cycle, then hands the Kobo back to its own UI without rebooting. On a device with no home button, or if it cannot be read, the loop logs a warning at startup and the method below still works. Note that the wifi is powered down on the way out and Kobo does not always notice, so you may have to toggle wifi off and on once in the Kobo settings.
+- To exit the TRMNL loop, press the **home button**. The loop finishes its current cycle, then hands the Kobo back to its own UI without rebooting. On a device with no home button (e.g. Clara HD), **hold the power button for about 1.5s** instead — a quick tap still just wakes the screen for the next refresh, same as always. If neither key can be read, the loop logs a warning at startup and the method below still works. Note that the wifi is powered down on the way out and Kobo does not always notice, so you may have to toggle wifi off and on once in the Kobo settings.
 - To exit your Kobo when running the TRMNL loop, when powered off (sleeping between cycle), power it on (and release power button), and then hold the power button down until the power light blinks rapidly (or blue on mini). When the power light stops blinking, or lights up blue and glows solid, release the power button.
 
 
 ## FAQ
 - How to get out of TRMNL loop ?
-    - To exit the TRMNL loop, press the **home button**. The loop finishes its current cycle, then hands the Kobo back to its own UI without rebooting. On a device with no home button, or if it cannot be read, the loop logs a warning at startup and the method below still works. Note that the wifi is powered down on the way out and Kobo does not always notice, so you may have to toggle wifi off and on once in the Kobo settings.
+    - To exit the TRMNL loop, press the **home button**. The loop finishes its current cycle, then hands the Kobo back to its own UI without rebooting. On a device with no home button (e.g. Clara HD), **hold the power button for about 1.5s** instead — a quick tap still just wakes the screen for the next refresh, same as always. If neither key can be read, the loop logs a warning at startup and the method below still works. Note that the wifi is powered down on the way out and Kobo does not always notice, so you may have to toggle wifi off and on once in the Kobo settings.
 - To exit your Kobo when running the TRMNL loop, when powered off (sleeping between cycle), power it on (and release power button), and then hold the power button down until the power light blinks rapidly (or blue on mini). When the power light stops blinking, or lights up blue and glows solid, release the power button.
 - Why do sometimes I see a connection issue when KOBO's waking up ?
   - If your wifi connection is bad, it may take more time to connect than the 8s allowed by default, if this is the case, it can be fixed using ```ConnectedGracePeriod``` setting in config.json to increase the time to connect to the wifi.

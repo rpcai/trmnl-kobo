@@ -18,6 +18,40 @@ SaneSeconds() {
     esac
 }
 
+# Log $1 and flush it to flash. The log lives on the onboard storage, so a line
+# only survives a lock-up and the hard reset after it if it was synced, and the
+# steps worth knowing the last of are the ones that wedge.
+Mark() {
+    ./scripts/log.sh "$1" "${2:-DEBUG}"
+    sync
+}
+
+# Stop whatever is still bringing the wifi up, and wait until it has let go of
+# the module. RestoreWifi runs in the background, and killing only its wrapper
+# leaves enable-wifi.sh mid-insmod and dhcpcd waiting for a lease. Tearing the
+# wifi down underneath them rmmods a module that is still loading, which is a
+# good way to hang the kernel (c.f. the comment in disable-wifi.sh).
+StopWifiBringup() {
+    # parents first, so nothing starts a next step behind our back
+    for name in restore-wifi-async.sh enable-wifi.sh force-wifi-connection.sh obtain-ip.sh; do
+        pkill -f "$name"
+    done
+
+    # what they were running keeps going on its own, let it finish
+    waited=0
+    while pkill -0 -x insmod || pkill -0 -x rmmod || pkill -0 -f ntx_io.lua; do
+        if [ $waited -ge 40 ]; then # 10s
+            ./scripts/log.sh "wifi module load still in progress after 10s, tearing down anyway" "WARN"
+            break
+        fi
+        usleep 250000
+        waited=$((waited + 1))
+    done
+    if [ $waited -gt 0 ]; then
+        ./scripts/log.sh "waited $((waited / 4))s for the wifi bring-up to let go" "DEBUG"
+    fi
+}
+
 # One suspend attempt, for $1 seconds
 SuspendOnce() {
     suspend_seconds=$1
@@ -30,7 +64,7 @@ SuspendOnce() {
         ./scripts/log.sh "Enable suspend state failed" "WARN"
     fi
 
-    ./scripts/log.sh "Setting up rtcwake alarm" "DEBUG"
+    Mark "Setting up rtcwake alarm" "DEBUG"
 
     # Record the start time
     start_time=$(date +%s)
@@ -40,6 +74,8 @@ SuspendOnce() {
     else
         ./scripts/log.sh "rtcwake failed, will try secondary suspend to memory next" "WARN"
     fi
+
+    Mark "back from rtcwake" "DEBUG"
 
     # Calculate the elapsed time
     elapsed_time_in_rtcwake=$(($(date +%s) - start_time))
@@ -63,6 +99,7 @@ SuspendOnce() {
         sleep 1s
         sync
         sleep 2s
+        Mark "writing mem to power state" "DEBUG"
         echo mem >/sys/power/state
         if [ $? -eq 0 ]; then
             ./scripts/log.sh "Suspend to mem ok" "DEBUG"
@@ -89,11 +126,14 @@ SuspendFor() {
     total_seconds=$1
 
     # A RestoreWifi still in its wpa wait would otherwise thaw after the suspend
-    # and tear down the wifi the next iteration just brought up
-    pkill -f restore-wifi-async.sh
+    # and tear down the wifi the next iteration just brought up. And it must be
+    # fully stopped before the teardown below, not racing it.
+    Mark "stopping wifi bring-up" "DEBUG"
+    StopWifiBringup
 
-    ./scripts/log.sh "disabling wifi" "DEBUG"
+    Mark "disabling wifi" "DEBUG"
     ./scripts/disable-wifi.sh >>/tmp/debug.log 2>&1
+    Mark "wifi disabled" "DEBUG"
     # Nothing reaches the server with the radio off and each attempt blocks for
     # the connect timeout, so stop trying. The next iteration is a new process
     # and picks the configured level back up.

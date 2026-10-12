@@ -1,6 +1,18 @@
 #!/bin/sh
 export LC_ALL="en_US.UTF-8"
 
+# /tmp is tmpfs, so a log kept there is gone along with the hard reset a lock-up
+# needs, which is exactly when it is wanted. Keep it in the install dir instead
+# and leave /tmp/debug.log as a symlink, so every writer keeps its path.
+# NOTE: runs on both passes (we re-exec from /tmp below), so TRMNL_DIR may or may
+#       not be set yet.
+PERSISTENT_LOG="${TRMNL_DIR:-$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)}/debug.log"
+# trim at start rather than exit, an exit is not guaranteed
+if [ -f "${PERSISTENT_LOG}" ] && [ "$(wc -c <"${PERSISTENT_LOG}")" -gt 500000 ]; then
+    tail -c 250000 "${PERSISTENT_LOG}" >"${PERSISTENT_LOG}.new" && mv -f "${PERSISTENT_LOG}.new" "${PERSISTENT_LOG}"
+fi
+ln -sf "${PERSISTENT_LOG}" /tmp/debug.log
+
 # Set your TRMNL Mac Address in Id:
 export trmnl_id="$(jq -r '.TrmnlId' config.json)"
 
@@ -76,6 +88,9 @@ if [ "${SCRIPT_DIR}" != "/tmp" ]; then
     chmod 777 "/tmp/trmnl.sh"
     exec "/tmp/trmnl.sh" "$@"
 fi
+
+# The log now outlives a run, so mark where this one starts (log lines only carry a time)
+echo "=== trmnl.sh started $(date)" >>/tmp/debug.log 2>&1
 
 # Attempt to switch to a sensible CPUFreq governor when that's not already the case...
 # Swap every CPU at once if available
@@ -434,12 +449,8 @@ rm -f "${TRMNL_STOP_FLAG}"
 
 # Wipe the clones on exit
 rm -f "/tmp/trmnl.sh"
-# we keep at most 500KB worth of crash log
-if [ -e /tmp/debug.log ]; then
-    tail -c 500000 /tmp/debug.log >/tmp/debug.log.new
-    mv -f /tmp/debug.log.new /tmp/debug.log
-fi
-cp /tmp/debug.log debug.log
+# the log already lives in the install dir, see the top of this script
+sync
 
 # Stopping with the button is meant to avoid the reboot, so hand the device back
 # to nickel instead. Every other way out still reboots, as it always did.

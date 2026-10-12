@@ -9,6 +9,8 @@ DEFAULT_REFRESH=900
 MAX_SUSPEND_ATTEMPTS=5
 # set by trmnl.sh, which owns the watcher that writes it
 STOP_FLAG=${TRMNL_STOP_FLAG:-/tmp/trmnl_stop}
+# dropped by the same watcher on a short power tap, which also wakes the device
+TAP_FLAG=${TRMNL_TAP_FLAG:-/tmp/trmnl_tap}
 
 # Echo $1 if it is a positive integer, $2 otherwise
 SaneSeconds() {
@@ -117,6 +119,20 @@ SuspendOnce() {
     fi
 }
 
+# Wait up to $1 seconds for the stop or tap flag. The key events are read by the
+# watcher once it thaws, so they land a moment after we do, not before.
+WaitForKeyFlag() {
+    ticks=$(($1 * 4))
+    while [ $ticks -gt 0 ]; do
+        if [ -e "$STOP_FLAG" ] || [ -e "$TAP_FLAG" ]; then
+            return 0
+        fi
+        usleep 250000
+        ticks=$((ticks - 1))
+    done
+    return 1
+}
+
 # Shut the wifi down and stay suspended for $1 seconds. A suspend can come back
 # early, from a stray wakeup source rather than our alarm, and simply carrying on
 # would spend a whole wifi-and-fetch iteration well before the refresh is due, so
@@ -151,6 +167,13 @@ SuspendFor() {
             ./scripts/log.sh "Stop requested, ending the sleep early" "DEBUG"
             break
         fi
+        # A tap on the power button is somebody asking for the current dashboard
+        # now. Consume it, and return so the next iteration fetches.
+        if [ -e "$TAP_FLAG" ]; then
+            rm -f "$TAP_FLAG"
+            ./scripts/log.sh "Power tap, ending the sleep early to refresh" "DEBUG"
+            break
+        fi
 
         remaining=$((deadline - $(date +%s)))
         # close enough, another suspend would cost more than it saves
@@ -164,12 +187,12 @@ SuspendFor() {
 
         SuspendOnce $remaining
 
-        # Coming back early is usually someone pressing power to look at the
-        # screen, so stay up long enough for them to press home, otherwise we
-        # would drop back to sleep before the button could be used at all
+        # Coming back early is usually someone pressing power. Stay up long
+        # enough to tell a tap (refresh now) from a hold (stop) from a stray
+        # wakeup (back to sleep), which the flags above sort out on the next lap.
         if [ $((deadline - $(date +%s))) -gt 10 ]; then
-            ./scripts/log.sh "woken early, staying up briefly in case you want to stop" "WARN"
-            sleep 5s
+            ./scripts/log.sh "woken early, waiting briefly for a power tap or hold" "WARN"
+            WaitForKeyFlag 5
         fi
     done
 }
@@ -201,6 +224,10 @@ function ErrorOnCurl(){
     SuspendFor $retry_in
 }
 
+
+# Whatever tapped us awake is being served by this very iteration, so it must not
+# queue up a second one.
+rm -f "$TAP_FLAG"
 
 ./scripts/ledToggle.sh 8 >>/tmp/debug.log 2>&1
 

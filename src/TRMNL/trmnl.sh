@@ -418,8 +418,11 @@ export ORIG_FB_BPP ORIG_FB_ROTA ORIG_CPUFREQ_GOV CPUFREQ_SYSFS_PATH
 # watcher holds the input device open for the whole run, because a press is
 # dropped by the kernel if nothing has it open, and we are asleep most of the time.
 export TRMNL_STOP_FLAG=/tmp/trmnl_stop
-rm -f "${TRMNL_STOP_FLAG}"
-./scripts/watch-stop-button.sh "${TRMNL_STOP_FLAG}" >>/tmp/debug.log 2>&1 &
+# A short power tap, which wakes the device, drops this: show the current
+# dashboard now instead of sleeping out the refresh. Consumed by trmnlloop.sh.
+export TRMNL_TAP_FLAG=/tmp/trmnl_tap
+rm -f "${TRMNL_STOP_FLAG}" "${TRMNL_TAP_FLAG}"
+./scripts/watch-stop-button.sh "${TRMNL_STOP_FLAG}" "${TRMNL_TAP_FLAG}" >>/tmp/debug.log 2>&1 &
 
 stopped_by_button="false"
 while true; do
@@ -445,7 +448,7 @@ done
 export log_to_server="NONE"
 
 pkill -f watch_key.lua
-rm -f "${TRMNL_STOP_FLAG}"
+rm -f "${TRMNL_STOP_FLAG}" "${TRMNL_TAP_FLAG}"
 
 # Wipe the clones on exit
 rm -f "/tmp/trmnl.sh"

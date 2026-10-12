@@ -21,15 +21,20 @@ struct input_event {
 };
 ]]
 
-assert(#arg == 3 or #arg == 4, "must pass an input device, a key code, a flag file & optionally a minimum hold in ms")
+assert(#arg >= 3 and #arg <= 5, "must pass an input device, a key code, a flag file & optionally a minimum hold in ms and a tap flag file")
 local device = arg[1]
 local key_code = tonumber(arg[2])
-local flag_file = arg[3]
+-- "-" means there is no stop action for this key, only taps are reported
+local flag_file = arg[3] ~= "-" and arg[3] or nil
 -- On a device with no key of its own, the exit key is also the wake key, so a
 -- plain press cannot mean "stop" (every scheduled wake presses it too). A
 -- minimum hold turns this into "hold to exit", which a scheduled wake never
 -- does; 0 (the default) keeps the original fire-on-press behaviour.
 local min_hold_ms = tonumber(arg[4]) or 0
+-- Optional: a press shorter than the minimum hold is a tap, and drops this file
+-- instead of being ignored, so the loop can cut its sleep short. Ignored with no
+-- minimum hold, where every press already means stop.
+local tap_file = arg[5]
 
 local EV_KEY = 1
 local KEY_DOWN = 1
@@ -42,6 +47,12 @@ assert(fd ~= -1, "cannot open " .. device)
 local event = ffi.new("struct input_event[1]")
 local event_size = ffi.sizeof("struct input_event")
 local errors = 0
+
+local function drop_flag(path)
+    local flag = assert(io.open(path, "w"))
+    flag:write(key_code, "\n")
+    flag:close()
+end
 
 -- Blocks for the next event on our key, returning its (type, value, ms) or
 -- nil once the device is gone for good. Frozen along with everything else
@@ -73,13 +84,13 @@ while true do
     end
     if value == KEY_DOWN then
         if min_hold_ms <= 0 then
-            local flag = assert(io.open(flag_file, "w"))
-            flag:write(key_code, "\n")
-            flag:close()
+            if flag_file then
+                drop_flag(flag_file)
+            end
             break
         end
         -- Wait out the release to measure the hold; a short tap (a wake) is
-        -- silently ignored and we go back to watching for the next press.
+        -- a tap, not a stop, and we go back to watching for the next press.
         local up_value, released_at
         repeat -- auto-repeat events (value 2) arrive while the key is held
             up_value, released_at = next_key_event()
@@ -87,11 +98,15 @@ while true do
         if up_value == nil then
             break
         end
-        if up_value == KEY_UP and (released_at - pressed_at) >= min_hold_ms then
-            local flag = assert(io.open(flag_file, "w"))
-            flag:write(key_code, "\n")
-            flag:close()
-            break
+        if up_value == KEY_UP then
+            if (released_at - pressed_at) >= min_hold_ms then
+                if flag_file then
+                    drop_flag(flag_file)
+                    break
+                end
+            elseif tap_file then
+                drop_flag(tap_file)
+            end
         end
     end
 end

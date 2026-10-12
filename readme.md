@@ -98,6 +98,7 @@ Here are the steps to get the TRMNL app working on your Kobo (show hidden folder
   - (Located in src/nm/TRMNL.ini in this repo)
 - TRMNL app can be started using NickelMenu
    - ![Menu](./doc/img/menu.png) 
+- To see the current dashboard now, instead of waiting out the refresh, **tap the power button** (a quick press and release). The Kobo wakes, fetches and shows it, then goes back to sleep. A tap while it is already awake queues one refresh. Holding it for about 1.5s still exits, on devices without a home button.
 - To exit the TRMNL loop, press the **home button**. The loop finishes its current cycle, then hands the Kobo back to its own UI without rebooting. On a device with no home button (e.g. Clara HD), **hold the power button for about 1.5s** instead — a quick tap still just wakes the screen for the next refresh, same as always. If neither key can be read, the loop logs a warning at startup and the method below still works. Note that the wifi is powered down on the way out and Kobo does not always notice, so you may have to toggle wifi off and on once in the Kobo settings.
 - To exit your Kobo when running the TRMNL loop, when powered off (sleeping between cycle), power it on (and release power button), and then hold the power button down until the power light blinks rapidly (or blue on mini). When the power light stops blinking, or lights up blue and glows solid, release the power button.
 

@@ -433,7 +433,7 @@ while true; do
     # logging everything block the suspend
     ./trmnlloop.sh
     if [ -e "${TRMNL_STOP_FLAG}" ]; then
-        ./scripts/log.sh "Home button pressed, stopping after $count iterations." "DEBUG"
+        ./scripts/log.sh "Stop pressed (home button, or a power hold), stopping after $count iterations." "DEBUG"
         stopped_by_button="true"
         break
     fi
